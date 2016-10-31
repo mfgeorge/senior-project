@@ -14,7 +14,7 @@
 
 // Linear Pot offset if reading does not start at 0
 #define LIN_POT_OFFSET       0.0
-#define LIN_POT_SCALE        200/25.4*1/1023 // in inches for 200 mm length strip
+#define LIN_POT_SCALE        300/25.4*1/1023 // in inches for 200 mm length strip
 
 // The connections from the Arduino Uno to the IC-MB4 chip are:
 
@@ -39,6 +39,9 @@ enum Position_Mode {
 // Function prototype for converting linear pot analog reading to inches
 float linearPotToInches(uint16_t rawPosition, float offset);
 
+// Function for setting the measurement mode to encoder or linear pot
+uint8_t setMeasureMode();
+
 // create a 7 segment display object for displaying the reading
 Adafruit_7segment display = Adafruit_7segment();
 
@@ -47,14 +50,7 @@ void setup() {
     Serial.begin(9600);
     Serial.println("---- Accumulator Position Testing Code Start Up ----");
     display.begin(0x70);
-    if (digitalRead(SWITCH)) {
-      mode = linearPot;
-      Serial.println("Linear Pot Mode Selected");
-    } 
-    else {
-      mode = encoder;
-      Serial.println("Encoder Mode Selected");
-    }
+    mode = setMeasureMode();
 }
 
 void loop() {
@@ -72,25 +68,30 @@ void loop() {
      static uint32_t rawPosition;
 
      while (true) {
-        // Get the raw encoder position
-        rawPosition = master.getRawPosition();
+      // Get the raw encoder position
+      rawPosition = master.getRawPosition();
 
-        // Get the position in inches
-        position = master.getPosition();
+      // Get the position in inches
+      position = master.getPosition();
 
-        // Display the position
-        display.println(position, 3); // Try to diplay to 3rd decimal point
-        display.writeDisplay();
+      // Display the position
+      display.println(position, 3); // Try to diplay to 3rd decimal point
+      display.writeDisplay();
 
-        // Print out position information to a serial terminal too for debugging
-        Serial.print("Position [in] = \t");
-        Serial.print(position, 4);
+      // Print out position information to a serial terminal too for debugging
+      Serial.print("Position [in] = \t");
+      Serial.print(position, 4);
 
-        // Print out the raw bit position as well for debugging 
-        Serial.print("\t Raw Position [bits] = \t");
-        Serial.println(rawPosition);
-        delay(100);
+      // Print out the raw bit position as well for debugging 
+      Serial.print("\t Raw Position [bits] = \t");
+      Serial.println(rawPosition);
+      // Check for a mode change
+      if (!(digitalRead(SWITCH))){
+        mode = setMeasureMode();
+        break;
       }
+      delay(100);
+    }
    }
    else if (mode == linearPot) {
 
@@ -98,6 +99,8 @@ void loop() {
     static uint16_t rawPosition;
 
     while (true) {
+      Serial.print("Digital Pin: ");
+      Serial.println(digitalRead(SWITCH));
       // Read in the raw analog reading
       rawPosition = analogRead(LIN_POT);
 
@@ -115,6 +118,12 @@ void loop() {
       // Print out the raw bit position as well for debugging 
       Serial.print("\t Raw Position [bits] = \t");
       Serial.println(rawPosition);
+
+      // Check for a mode change
+      if (digitalRead(SWITCH)){
+        mode = setMeasureMode();
+        break;
+      }
       delay(100);
     }
    }
@@ -125,4 +134,15 @@ float linearPotToInches(uint16_t rawPosition, float offset) {
   return float(rawPosition)*LIN_POT_SCALE - offset;
 }
 
-
+uint8_t setMeasureMode(){
+  pinMode(SWITCH, INPUT_PULLUP);
+  if (digitalRead(SWITCH)) {
+    mode = encoder;
+    Serial.println("Encoder Mode Selected");
+  } 
+  else {
+    mode = linearPot;
+    Serial.println("Linear Pot Mode Selected");
+  }
+  return mode;
+}
