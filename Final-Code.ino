@@ -8,13 +8,14 @@
 #include <Wire.h>
 #include "Adafruit_LEDBackpack.h"
 #include "Adafruit_GFX.h"
+#include "Filters.h"
 
 // Encoder Offset if reading does not start at 0 at the start of the encoder
-#define ENCODER_OFFSET       126.8997-0.0516-0.0479-0.0491 // in inches
+#define ENCODER_OFFSET       124.9 // in inches
 
 // Linear Pot offset if reading does not start at 0
-#define LIN_POT_OFFSET       0.0
-#define LIN_POT_SCALE        300/25.4*1/1023 // in inches for 200 mm length strip
+#define LIN_POT_OFFSET       2.001
+#define LIN_POT_SCALE        200/25.4*1/1023 // in inches for 200 mm length strip
 
 // The connections from the Arduino Uno to the IC-MB4 chip are:
 
@@ -72,7 +73,7 @@ void loop() {
       rawPosition = master.getRawPosition();
 
       // Get the position in inches
-      position = master.getPosition();
+      position = abs(master.getPosition());
 
       // Display the position
       display.println(position, 3); // Try to diplay to 3rd decimal point
@@ -98,6 +99,13 @@ void loop() {
     // Raw position in bits
     static uint16_t rawPosition;
 
+    // Filter objects 
+    static const float testFrequency = 2;                     // test signal frequency (Hz)
+    static const float windowLength = 20.0/testFrequency;     // how long to average the signal, for statistist
+    static FilterOnePole filterOneLowpass( LOWPASS, testFrequency );   // create a one pole (RC) lowpass filter
+    static RunningStatistics filterOneLowpassStats;                    // create running statistics to smooth these values
+    filterOneLowpassStats.setWindowSecs( windowLength );
+
     while (true) {
       Serial.print("Digital Pin: ");
       Serial.println(digitalRead(SWITCH));
@@ -105,7 +113,7 @@ void loop() {
       rawPosition = analogRead(LIN_POT);
 
       // Convert the reading to inches
-      position = linearPotToInches(rawPosition, LIN_POT_OFFSET);
+      position = linearPotToInches(rawPosition, LIN_POT_OFFSET, &filterOneLowpass);
 
       // Display the position
       display.println(position, 3); // Try to diplay to 3rd decimal point
@@ -130,7 +138,10 @@ void loop() {
 }
 
 
-float linearPotToInches(uint16_t rawPosition, float offset) {
+float linearPotToInches(uint16_t rawPosition, float offset, FilterOnePole* filterOneLowpass) {
+
+  filterOneLowpass->input(rawPosition);
+  rawPosition = filterOneLowpass->output();
   return float(rawPosition)*LIN_POT_SCALE - offset;
 }
 

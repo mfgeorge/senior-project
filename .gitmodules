@@ -1,0 +1,3 @@
+[submodule "libraries/Filters"]
+	path = libraries/Filters
+	url = https://github.com/JonHub/Filters.git
