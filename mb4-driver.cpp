@@ -1,5 +1,5 @@
 /* mb4-driver.cpp
-   Class for interfacing with an IC-MB4 master IC. 
+   Source code for a class for interfacing with an IC-MB4 master IC. 
    
    California Polytechnic State University, San Luis Obispo
    In partial fulfillment of the requirements for a bachelor's 
@@ -40,10 +40,19 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// Include the header file which has all of the prototypes of the functions
+// contained in this source file.
 #include "mb4-driver.h"
 
+// For class description, please refer to the header file. This is the first 
+// place to start for a general overview of the methods available, and can 
+// provide a general idea of the methods available in this class. 
 
 
+// MB4Driver: Constructor for the MB4Driver class
+// Parameters: 
+// selectPin: the SPI chip select pin that the mb4 is connected to
+// offset: (optional parameter) the offset in inches for the encoder readings
 MB4Driver::MB4Driver(uint8_t selectPin, float offset=0){
    // Begin the SPI communication protocol that will be used to 
    // communicate with the IC-mb4 chip
@@ -181,6 +190,12 @@ MB4Driver::MB4Driver(uint8_t selectPin, float offset=0){
 
 }
 
+// readRegister: Function for reading a specific register on the MB4
+// Parameters:
+// registerAddress: the register starting address to read from
+// numBytesToRead: the number of the bytes to read
+// returns: the value read from the register address assuming that the 
+//          first register read is the most significant byte
 uint32_t MB4Driver::readRegister(uint8_t registerAddress, uint8_t numBytesToRead){
    // Drop the chip select pin low to select MB4 for output
    digitalWrite(this->selectPin, 0);
@@ -212,12 +227,20 @@ uint32_t MB4Driver::readRegister(uint8_t registerAddress, uint8_t numBytesToRead
    // Bring chip select high to stop communication with MB4
    digitalWrite(this->selectPin, 1);
 
+   // End the SPI transaction for nice cooperation with other 
+   // SPI dependent libraries
    SPI.endTransaction();
 
    return value;
 
 }
 
+// writeRegister: A function to write data to a register on the MB4 
+//                  (array version) 
+// Parameters:
+// registerAddress: the starting address of the register to write to
+// data: an array of bytes to write 
+// numBytesToWrite: the number of bytes in array pointer or data to write
 void MB4Driver::writeRegister(uint8_t registerAddress, uint8_t* data, uint8_t numBytesToWrite){
    // Drop the chip select pin low to select MB4 for output
    digitalWrite(this->selectPin, 0);
@@ -237,10 +260,17 @@ void MB4Driver::writeRegister(uint8_t registerAddress, uint8_t* data, uint8_t nu
    // Bring chip select high to stop communication with MB4
    digitalWrite(this->selectPin, 1);
 
+   // End the SPI transaction for nice cooperation with other 
+   // SPI dependent libraries
    SPI.endTransaction();
 
 }
 
+// writeRegister: A function to write data to a register on the MB4 
+//                  (byte version) 
+// Parameters:
+// registerAddress: the starting address of the register to write to
+// data: the byte of data to be written to that address
 void MB4Driver::writeRegister(uint8_t registerAddress, uint8_t data){
    // Drop the chip select pin low to select MB4 for output
    digitalWrite(this->selectPin, 0);
@@ -264,6 +294,11 @@ void MB4Driver::writeRegister(uint8_t registerAddress, uint8_t data){
 
 }
 
+// writeInstruction: A function to quickly write data to the MB4's instruction 
+//                  register.
+// Parameters:
+// instruction: The instruction to write to the MB4's instruction register
+// returns: nothing
 void MB4Driver::writeInstruction(uint8_t instruction){
    // Drop the chip select pin low to select MB4 for output
    digitalWrite(this->selectPin, 0);
@@ -284,9 +319,10 @@ void MB4Driver::writeInstruction(uint8_t instruction){
 
 }
 
-// getRawPosition()
+// getRawPosition:
 // A function to get the raw position data from the MB4 chip. This is
 // where SPI must be used to communicate with the MB4 chip. 
+// Parameters: none
 // Returns: raw position in a 0 to 2^26 number. 
 uint32_t MB4Driver::getRawPosition() {
 
@@ -325,7 +361,7 @@ uint32_t MB4Driver::getRawPosition() {
       // Serial.println(reading);
    }
 
-   // Unlock the bank before reading SCDATA1 to prevent data corruption
+   // Unlock the bank after reading SCDATA1 to allow those registers to update
    currentInstruction = this->readRegister(INSTR, 1);
    currentInstruction &= ~(1 << 6);
    this->writeInstruction(currentInstruction);
@@ -338,6 +374,13 @@ uint32_t MB4Driver::getRawPosition() {
 
 }
 
+// checkStatus_unprotected: a function for use after the data registers
+//                          have been locked. Checks the error registers
+//                          to make sure the encoder and the MB4 are not
+//                          reporting any errors.
+// Parameters: None 
+// Returns: the currentStatus of the encoder. which can be
+//          no_errors, invalid_crc, encoder_warning, or encoder_alarm.
 uint8_t MB4Driver::checkStatus_unprotected(){
 
    // The encoder status (no warnings is 00, refer to LMA10 datasheet)
@@ -350,15 +393,18 @@ uint8_t MB4Driver::checkStatus_unprotected(){
    if ((encoderStatus == 0) && valid && this->currentStatus != encoder_alarm) {
       this->currentStatus = no_errors;
    }
-   else if (!valid && this->currentStatus != encoder_alarm) {               // Error in com between MB4 and encoder
+   else if (!valid && this->currentStatus != encoder_alarm) {               
+   // Error in com between MB4 and encoder
       this->currentStatus = invalid_crc;
       Serial.println("INVALID CRC");
    }  
-   else if (encoderStatus == 1 && this->currentStatus != encoder_alarm) {  // Close to overspeed, consult LMA10 datasheet
+   else if (encoderStatus == 1 && this->currentStatus != encoder_alarm) {  
+   // Close to overspeed, consult LMA10 datasheet
       this->currentStatus = encoder_warning; 
       Serial.println("ENCODER WARNING");
    }
-   else if (encoderStatus == 2 || this->currentStatus == encoder_alarm) {   // Encoder invalid position data
+   else if (encoderStatus == 2 || this->currentStatus == encoder_alarm) {   
+   // Encoder invalid position data
       this->currentStatus = encoder_alarm;
       Serial.println("ENCODER ALARM");
    }
@@ -366,12 +412,28 @@ uint8_t MB4Driver::checkStatus_unprotected(){
    return this->currentStatus;
 }
 
+
+// convertRawPosition: converts the raw position readings of the encoder (bits)
+//                    into a decimal number in inches
+// Parameters:
+// rawPos: The raw position in bits 
+// offset: The offset distance in inches to acheive 0 (some encoder strips don't
+//          start at 0)
+// returns: a float representing the position in inches on the encoder strip
 float MB4Driver::convertRawPosition(uint32_t rawPos, float offset){
    return (float)(rawPos)*CONV_FAC - offset;
 }
 
+// getPosition: gets the current position of the encoder in inches. This function
+//              will automate the call of getRawPosition() and put the output into
+//              convertRawPosition. 
+// Parameters: None
+// returns: a float representing the position of the encoder in inches
 float MB4Driver::getPosition(){
+   // get the current position in inches from the encoder
    float position = this->convertRawPosition(this->getRawPosition(), this->offset);
+   // For some reason, the position will suddenly jump to <100 if the encoder 
+   // goes off the strip
    if (position > 10.0 && position < 100) {
       position -= 85.60; // cover the case of barely going off the strip
    }
@@ -381,6 +443,12 @@ float MB4Driver::getPosition(){
    return position;
 }
 
+// printImportantRegisters: A function to print all of the important registers that 
+//                          must be configured in order for a single encoder sensor
+//                          to be used in a polling scheme. This function is useful 
+//                          for designing and debugging applications with the MB4 ic
+// Parameters: None
+// returns: Nothing (the print to standard out is what results)
 void MB4Driver::printImportantRegisters(){
    Serial.println();
    Serial.println("------ Important Registers Print out ------");
@@ -436,6 +504,11 @@ void MB4Driver::printImportantRegisters(){
    Serial.println("------ End of Important Register Print out -------");
 }
 
+// printSCDATA1Registers: prints all of the registers associated with the 
+//                      first slave device. This function is useful for 
+//                      debugging and designing code for specific applications.
+// Parameters: None
+// Returns: nothing
 void MB4Driver::printSCDATA1Registers(){
 
    // Lock the bank before reading SCDATA1 to prevent data corruption
@@ -468,18 +541,26 @@ void MB4Driver::printSCDATA1Registers(){
    Serial.print("\t| 07: ");
    Serial.println(this->readRegister(0x07, 1), HEX);
 
-   // Unlock the bank before reading SCDATA1 to prevent data corruption
+   // Unlock the bank after reading SCDATA1 to allow the registers to update
    currentInstruction = this->readRegister(INSTR, 1);
    currentInstruction &= ~(1 << 6);
    this->writeInstruction(currentInstruction);
 
 }
 
+// printVersion: Function to use for printing the version of the MB4 ic
+//              iC Haus reccomends this as the first step to see if your 
+//              MB4 is wired correctly and initially establishing 
+//              communication
+// Parameters: None
+// Returns: Nothing
 void MB4Driver::printVersion() {
 
+   // read the version and revision register
    uint32_t version = this->readRegister(VERSION, 1);
    uint32_t revision = this->readRegister(REVISION, 1);
 
+   // Print them out to the user over serial 
    Serial.println("Version data of MB4 instantiated:");
    Serial.print("\n Version recieved is: \t");
    Serial.print(version);

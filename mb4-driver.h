@@ -9,7 +9,7 @@
    10/21/16
 
    This code comes without any warrenty or guarantee from the author. 
-   Any usage is at the discression of the user, and should be done 
+   Any usage is at the discretion of the user, and should be done 
    at their own risk. 
 
    This software is hereby licensed under the Modified BSD License.
@@ -99,6 +99,8 @@
 #define WRITE_DATA0  0x0B
 
 // Register addresses to read from the IC Haus MB4 Chip
+// Please refer to the datasheet, as the same names for the 
+// registers are used here that are in the datasheet
 #define SCDATA1   0x00
 #define SCDATA1_CRC  0x07
 #define ENSCD1    0xC0
@@ -122,10 +124,28 @@
 #define CDS_STATUS0  0xF8
 #define CDS_STATUS1  0xF9
 
+// MB4Driver class: a class for communicating with the IC-MB4 master from 
+//                iC Hause over SPI. This class also implements methods for
+//                reading a Renishaw LMA10 absolute magnetic encoder that is 
+//                connected to the IC-MB4 in the first slave position. However,
+//                primitive readRegister and writeRegister methods are available,
+//                allowing this code to be adapted for use in other applications.
+//                It is strongly recommended that one is familiar with the IC-MB4
+//                datasheet before attempting to interpret specific low level 
+//                parts of this code, or before adapting this code to a different 
+//                specific application than it was originally intended.
+// 
+// For all functions, see the comment above each one in the source file (.cpp) for a more in
+// depth explanation. 
 class MB4Driver {
+   // Private methods are for use only within other methods in the MB4Driver
+   // class.
    private:
+      // The SPI chip select pin that the IC-MB4 is connected to
       uint8_t selectPin;
 
+      // The different status states the MB4 can have. This status also contains
+      // status interpretations that are specific to the Renishaw LMA10 encoder
       enum status
       {
          no_errors,        // All clear for data release
@@ -133,14 +153,19 @@ class MB4Driver {
          encoder_warning,  // Warning from the encoder (close to overspeed?)
          invalid_crc       // Cyclic check sum reported incorrectly
 
-      } currentStatus;
+      } currentStatus; // currentStatus will hold the status 
 
+      // For descriptions of these two functions please see source file
       uint8_t checkStatus_unprotected();
 
       uint32_t currentRawPosition;
 
+      // Class member variable that will hold the offset for the encoder
       float offset;
    public:
+      // For descriptions of these functions please see the source file,
+      // however effort has been made to make the function names self 
+      // explanatory. 
       MB4Driver(uint8_t selectPin, float offset);
 
       uint32_t readRegister(uint8_t registerAddress, uint8_t numBytesToRead);
